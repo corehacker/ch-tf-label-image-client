@@ -66,19 +66,6 @@ using tensorflow::Status;
 using tensorflow::string;
 using tensorflow::int32;
 
-static void onFile (std::string name, std::string ext, std::string path, void *this_);
-
-static void onFile (std::string name, std::string ext, std::string path, void *this_) {
-    printf ("File: %10s %50s %s\n",
-        ext.data(), name.data(), path.data());
-}
-
-int fts () {
-    FtsOptions options;
-    options.filters.emplace_back<string>("jpg");
-    Fts *fts = new Fts ("./tensorflow/examples/ch-tf-label-image-client", &options);
-    fts->walk(onFile, nullptr);
-}
 
 class LabelImage {
 private:
@@ -169,7 +156,6 @@ Status LabelImage::LoadGraph(const string& graph_file_name,
 
 int LabelImage::init() {
   // First we load and initialize the model.
-  std::unique_ptr<tensorflow::Session> session;
   string graph_path = tensorflow::io::JoinPath(root, graph);
   Status load_graph_status = LoadGraph(graph_path, &session);
   if (!load_graph_status.ok()) {
@@ -391,7 +377,6 @@ int LabelImage::process(string image) {
     return -1;
   }
 
-#if 0
   // This is for automated testing to make sure we get the expected result with
   // the default settings. We know that label 653 (military uniform) should be
   // the top label for the Admiral Hopper image.
@@ -414,8 +399,26 @@ int LabelImage::process(string image) {
     LOG(ERROR) << "Running print failed: " << print_status;
     return -1;
   }
-#endif
   return 0;
+}
+
+static void onFile (std::string name, std::string ext, std::string path, void *this_);
+
+static void onFile (std::string name, std::string ext, std::string path, void *this_) {
+    printf ("File: %10s %50s %s\n",
+        ext.data(), name.data(), path.data());
+
+  LabelImage *labelImage = (LabelImage *) this_;
+  labelImage->process(path);
+}
+
+static int fts (LabelImage *labelImage);
+
+static int fts (LabelImage *labelImage) {
+    FtsOptions options;
+    options.filters.emplace_back<string>("jpg");
+    Fts *fts = new Fts ("./tensorflow/examples/ch-tf-label-image-client", &options);
+    fts->walk(onFile, labelImage);
 }
 
 int main(int argc, char* argv[]) {
@@ -467,7 +470,8 @@ int main(int argc, char* argv[]) {
 
   LabelImage *labelImage = new LabelImage();
   labelImage->init();
-  labelImage->process(image);
+
+  fts (labelImage);
 
   return 0;
 }
