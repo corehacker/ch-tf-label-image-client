@@ -57,7 +57,10 @@ limitations under the License.
 #include "tensorflow/core/public/session.h"
 #include "tensorflow/core/util/command_line_flags.h"
 
+#include <ch-pal/exp_pal.h>
+#include <ch-utils/exp_sock_utils.h>
 #include <ch-cpp-utils/fts.hpp>
+
 
 // These are all common classes it's handy to reference with no namespace.
 using tensorflow::Flag;
@@ -66,6 +69,7 @@ using tensorflow::Status;
 using tensorflow::string;
 using tensorflow::int32;
 
+typedef void (*OnLabel) (std::string image, std::vector<std::string> labels, std::vector<float> scores, void *this_);
 
 class LabelImage {
 private:
@@ -80,6 +84,8 @@ private:
   string output_layer;
   bool self_test;
   string labels;
+  OnLabel onLabel;
+  void *onLabelThis;
 
   Status LoadGraph(const string& graph_file_name,
         std::unique_ptr<tensorflow::Session>* session);
@@ -98,7 +104,9 @@ private:
   Status GetTopLabels(const std::vector<Tensor>& outputs,
         int how_many_labels,
         Tensor* indices, Tensor* scores);
-  Status PrintTopLabels(const std::vector<Tensor>& outputs,
+  Status PrintTopLabels(
+        const std::string image,
+        const std::vector<Tensor>& outputs,
         const string& labels_file_name);
   Status CheckTopLabel(const std::vector<Tensor>& outputs,
         int expected,
@@ -107,7 +115,7 @@ public:
   LabelImage();
   LabelImage(string root, string graph);
   ~LabelImage();
-  int init();
+  int init(OnLabel onLabel, void *this_);
   int process(string image);
 };
 
@@ -154,7 +162,10 @@ Status LabelImage::LoadGraph(const string& graph_file_name,
   return Status::OK();
 }
 
-int LabelImage::init() {
+int LabelImage::init(OnLabel onLabel, void *this_) {
+  this->onLabel = onLabel;
+  this->onLabelThis = this_;
+
   // First we load and initialize the model.
   string graph_path = tensorflow::io::JoinPath(root, graph);
   Status load_graph_status = LoadGraph(graph_path, &session);
@@ -163,6 +174,7 @@ int LabelImage::init() {
     return -1;
   }
   LOG(INFO) << "LoadGraph success";
+  return 0;
 }
 
 Status LabelImage::ReadEntireFile(tensorflow::Env* env, const string& filename,
@@ -310,9 +322,13 @@ Status LabelImage::GetTopLabels(const std::vector<Tensor>& outputs, int how_many
 
 // Given the output of a model run, and the name of a file containing the labels
 // this prints out the top five highest-scoring values.
-Status LabelImage::PrintTopLabels(const std::vector<Tensor>& outputs,
+Status LabelImage::PrintTopLabels(
+                      const std::string image,
+                      const std::vector<Tensor>& outputs,
                       const string& labels_file_name) {
   std::vector<string> labels;
+  std::vector<string> topLabels;
+  std::vector<float> topScores;
   size_t label_count;
   Status read_labels_status =
       ReadLabelsFile(labels_file_name, &labels, &label_count);
@@ -329,7 +345,13 @@ Status LabelImage::PrintTopLabels(const std::vector<Tensor>& outputs,
   for (int pos = 0; pos < how_many_labels; ++pos) {
     const int label_index = indices_flat(pos);
     const float score = scores_flat(pos);
-    LOG(INFO) << labels[label_index] << " (" << label_index << "): " << score;
+    // LOG(INFO) << labels[label_index] << " (" << label_index << "): " << score;
+
+    topLabels.push_back(labels[label_index]);
+    topScores.push_back(score);
+  }
+  if (NULL != onLabel) {
+    onLabel (image, topLabels, topScores, onLabelThis);
   }
   return Status::OK();
 }
@@ -394,7 +416,7 @@ int LabelImage::process(string image) {
   }
 
   // Do something interesting with the results we've generated.
-  Status print_status = PrintTopLabels(outputs, labels);
+  Status print_status = PrintTopLabels(image, outputs, labels);
   if (!print_status.ok()) {
     LOG(ERROR) << "Running print failed: " << print_status;
     return -1;
@@ -402,23 +424,85 @@ int LabelImage::process(string image) {
   return 0;
 }
 
-static void onFile (std::string name, std::string ext, std::string path, void *this_);
 
-static void onFile (std::string name, std::string ext, std::string path, void *this_) {
-    printf ("File: %10s %50s %s\n",
-        ext.data(), name.data(), path.data());
+class LabelClient {
+private:
+    LabelImage *labelImage = new LabelImage();
+    PAL_SOCK_HDL hl_sock_hdl;
+    uint8_t *puc_dns_name_str;
+    uint16_t us_host_port_ho;
 
-  LabelImage *labelImage = (LabelImage *) this_;
-  labelImage->process(path);
+    
+    void fts ();
+    static void _onFile (std::string name, std::string ext, std::string path, void *this_);
+    void onFile (std::string name, std::string ext, std::string path);
+
+    static void _onLabel (std::string image, std::vector<std::string> labels, std::vector<float> scores, void *this_);
+    void onLabel (std::string image, std::vector<std::string> labels, std::vector<float> scores);
+public:
+    LabelClient();
+    LabelClient(uint8_t *puc_dns_name_str, uint16_t us_host_port_ho);
+    ~LabelClient();
+    void init();
+    void process();
+};
+
+LabelClient::LabelClient() {
+  hl_sock_hdl = NULL;
+  puc_dns_name_str = (uint8_t *) "127.0.0.1";
+  us_host_port_ho = 8888; 
 }
 
-static int fts (LabelImage *labelImage);
+LabelClient::LabelClient(uint8_t *puc_dns_name_str, uint16_t us_host_port_ho) {
+}
 
-static int fts (LabelImage *labelImage) {
+LabelClient::~LabelClient() {
+}
+
+void LabelClient::fts () {
     FtsOptions options;
     options.filters.emplace_back<string>("jpg");
     Fts *fts = new Fts ("./tensorflow/examples/ch-tf-label-image-client", &options);
-    fts->walk(onFile, labelImage);
+    fts->walk(LabelClient::_onFile, this);
+}
+
+void LabelClient::init() {
+    SOCK_UTIL_HOST_INFO_X x_host_info = {0};
+    x_host_info.ui_bitmask |= eSOCK_UTIL_HOST_INFO_DNS_NAME_BM;
+    x_host_info.ui_bitmask |= eSOCK_UTIL_HOST_INFO_HOST_PORT_BM;
+    x_host_info.puc_dns_name_str = puc_dns_name_str;
+    x_host_info.us_host_port_ho = us_host_port_ho;
+       
+     // tcp_connect_sock_create (&hl_sock_hdl, &x_host_info, 1000);
+
+    labelImage = new LabelImage();
+    labelImage->init(LabelClient::_onLabel, this);
+}
+
+void LabelClient::process() {
+    fts();
+}
+
+void LabelClient::_onLabel (std::string image, std::vector<std::string> labels, std::vector<float> scores, void *this_) {
+  LabelClient *client = (LabelClient *) this_;
+  client->onLabel(image, labels, scores);
+}
+
+void LabelClient::onLabel (std::string image, std::vector<std::string> labels, std::vector<float> scores) {
+  for (int pos = 0; pos < labels.size(); ++pos) {
+    LOG(INFO) << image << " (" << labels[pos] << "): " << scores[pos];
+  }
+}
+
+void LabelClient::_onFile (std::string name, std::string ext, std::string path, void *this_) {
+  LabelClient *client = (LabelClient *) this_;
+  client->onFile(name, ext, path);
+}
+
+void LabelClient::onFile (std::string name, std::string ext, std::string path) {
+  printf ("File: %10s %50s %s\n",
+    ext.data(), name.data(), path.data());
+  labelImage->process(path);
 }
 
 int main(int argc, char* argv[]) {
@@ -468,10 +552,15 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
+#if 0
   LabelImage *labelImage = new LabelImage();
   labelImage->init();
 
   fts (labelImage);
+#endif
+  LabelClient *client = new LabelClient();
+  client->init();
+  client->process();
 
   return 0;
 }
