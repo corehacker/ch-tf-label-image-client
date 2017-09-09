@@ -30,8 +30,8 @@ void * LabelClient::_imageRoutine (void *arg, struct event_base *base) {
 }
 
 void * LabelClient::_networkRoutine (void *arg, struct event_base *base) {
-  NETWORK_MESSAGE_X *message = (NETWORK_MESSAGE_X *) arg;
-  LabelClient *client = message->client;
+  NetworkMessage *message = (NetworkMessage *) arg;
+  LabelClient *client = (LabelClient *) message->client();
   return client->networkRoutine(message);
 }
 
@@ -40,12 +40,7 @@ void *LabelClient::imageRoutine () {
   return NULL;
 }
 
-void *LabelClient::networkRoutine (NETWORK_MESSAGE_X *message) {
-
-  std::string image = message->image;
-  std::vector<std::string> labels = message->labels;
-  std::vector<float> scores = message->scores;
-
+void *LabelClient::networkRoutine (NetworkMessage *message) {
   Packet packet;
   PacketHeader *header = packet.mutable_header();
   header->set_payload(0);
@@ -53,16 +48,16 @@ void *LabelClient::networkRoutine (NETWORK_MESSAGE_X *message) {
 
   printf ("Payload? %d\n", packet.has_payload());
 
-#if 0
   IndexEntry *entry = NULL;
 
-  for (unsigned int pos = 0; pos < labels.size(); ++pos) {
-    LOG(INFO) << image << " (" << labels[pos] << "): " << scores[pos];
+  for (int pos = 0; pos < message->labels_size(); ++pos) {
+    NetworkMessage_Label label = message->labels(pos);
+    LOG(INFO) << message->image() << " (" << label.label() << "): " << label.score();
     entry = payload->add_entry();
-    entry->set_path(image.data());
+    entry->set_path(message->image());
     entry->set_index(pos);
-    entry->set_key(labels[pos].data());
-    entry->set_probability(scores[pos]);
+    entry->set_key(label.label());
+    entry->set_probability(label.score());
   }
   printf ("Num of entries: %d\n", payload->entry_size());
 
@@ -89,7 +84,6 @@ void *LabelClient::networkRoutine (NETWORK_MESSAGE_X *message) {
   } else {
     LOG(INFO) << "Success sending to server. " << e_error;
   }
-#endif
 
   return NULL;
 }
@@ -135,60 +129,19 @@ void LabelClient::_onLabel (std::string image, std::vector<std::string> labels, 
 }
 
 void LabelClient::onLabel (std::string image, std::vector<std::string> labels, std::vector<float> scores) {
-
-#if 0
-  NETWORK_MESSAGE_X *px_message = (NETWORK_MESSAGE_X *) malloc(sizeof(NETWORK_MESSAGE_X));
-  px_message->image = image;
-  px_message->labels = labels;
-  px_message->scores = scores;
-  px_message->client = this;
-  ThreadJob *job = new ThreadJob (LabelClient::_networkRoutine, px_message);
-  mNetworkPool->addJob(job);
-  
-#else
-  Packet packet;
-  PacketHeader *header = packet.mutable_header();
-  header->set_payload(0);
-  Index *payload = packet.mutable_payload();
-
-  printf ("Payload? %d\n", packet.has_payload());
-
-  IndexEntry *entry = NULL;
+  NetworkMessage *message = new NetworkMessage();
+  printf ("Label Client: %p\n", this);
+  message->set_client((::google::protobuf::uint64) this);
+  message->set_image(image);
 
   for (unsigned int pos = 0; pos < labels.size(); ++pos) {
-    LOG(INFO) << image << " (" << labels[pos] << "): " << scores[pos];
-    entry = payload->add_entry();
-    entry->set_path(image.data());
-    entry->set_index(pos);
-    entry->set_key(labels[pos].data());
-    entry->set_probability(scores[pos]);
+    NetworkMessage_Label *label = message->add_labels();
+    label->set_label(labels[pos]);
+    label->set_score(scores[pos]);
   }
-  printf ("Num of entries: %d\n", payload->entry_size());
-
-  int size = packet.ByteSize();
-  printf ("Size before: %d\n", size);
-
-  header->set_payload(size);
-
-  printf ("payload? %d\n", header->has_payload());
-  size = packet.ByteSize();
-  printf ("Size after: %d\n", size);
-
-  uint8_t *buffer = (uint8_t *) malloc(size);
-  memset(buffer, 0x00, size);
-  packet.SerializeToArray(buffer, size);
-
-  PAL_RET_E e_error = ePAL_RET_FAILURE;
-  e_error = pal_sock_send (hl_sock_hdl,
-      (uint8_t *) buffer,
-      (uint32_t *) &size,
-      0);
-  if (ePAL_RET_SUCCESS != e_error) {
-    LOG(ERROR) << "Error sending to server. " << e_error;
-  } else {
-    LOG(INFO) << "Success sending to server. " << e_error;
-  }
-#endif
+  printf ("Labels size: %d\n", message->labels_size());
+  ThreadJob *job = new ThreadJob (LabelClient::_networkRoutine, message);
+  mNetworkPool->addJob(job);
 }
 
 void LabelClient::_onFile (std::string name, std::string ext, std::string path, void *this_) {

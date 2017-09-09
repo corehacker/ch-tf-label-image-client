@@ -10,7 +10,9 @@ exports_files(["LICENSE"])
 cc_binary(
     name = "ch-tf-label-image-client",
     srcs = [
-        "main.cc", "label-image.h", "label-image.cc", "packet.pb.h", "packet.pb.cc", "communication.pb.cc", "communication.pb.h"
+        "main.cc", "label-client.h", "label-client.cc", "label-image.h", "label-image.cc",
+        "packet.pb.h", "packet.pb.cc", "communication.pb.cc", "communication.pb.h",
+        "label-client-internal.pb.h", "label-client-internal.pb.cc"
     ],
     linkopts = select({
         "//tensorflow:android": [

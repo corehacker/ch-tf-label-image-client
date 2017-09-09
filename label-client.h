@@ -9,7 +9,10 @@
 
 #include "packet.pb.h"
 #include "communication.pb.h"
+#include "label-client-internal.pb.h"
 
+using label_client_internal::NetworkMessage;
+using label_client_internal::NetworkMessage_Label;
 
 class LabelClient;
 
@@ -41,7 +44,7 @@ private:
     static void *_networkRoutine (void *arg, struct event_base *base);
 
     void *imageRoutine ();
-    void *networkRoutine (NETWORK_MESSAGE_X *message);
+    void *networkRoutine (NetworkMessage *message);
 public:
     LabelClient();
     LabelClient(uint8_t *puc_dns_name_str, uint16_t us_host_port_ho);
