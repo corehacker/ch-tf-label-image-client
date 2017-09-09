@@ -16,14 +16,6 @@ using label_client_internal::NetworkMessage_Label;
 
 class LabelClient;
 
-typedef struct _NETWORK_MESSAGE_X {
-  LabelClient *client; 
-  std::string image;
-  std::vector<std::string> labels;
-  std::vector<float> scores;
-} NETWORK_MESSAGE_X;
-
-
 class LabelClient {
 private:
     LabelImage *labelImage;
