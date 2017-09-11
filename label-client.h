@@ -4,12 +4,12 @@
 #include <ch-utils/exp_sock_utils.h>
 #include <ch-cpp-utils/fts.hpp>
 #include <ch-cpp-utils/thread-pool.hpp>
+#include <ch-protos/packet.pb.h>
+#include <ch-protos/communication.pb.h>
+#include <ch-protos/label-client-internal.pb.h>
 
 #include "label-image.h"
 
-#include "packet.pb.h"
-#include "communication.pb.h"
-#include "label-client-internal.pb.h"
 
 using label_client_internal::NetworkMessage;
 using label_client_internal::NetworkMessage_Label;
