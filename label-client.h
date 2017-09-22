@@ -3,6 +3,7 @@
 #include <ch-pal/exp_pal.h>
 #include <ch-utils/exp_sock_utils.h>
 #include <ch-cpp-utils/fts.hpp>
+#include <ch-cpp-utils/fs-watch.hpp>
 #include <ch-cpp-utils/thread-pool.hpp>
 #include <ch-protos/packet.pb.h>
 #include <ch-protos/communication.pb.h>
@@ -20,6 +21,7 @@ class LabelClient {
 private:
     LabelImage *labelImage;
     Fts *fts;
+    FsWatch *fsWatch;
     PAL_SOCK_HDL hl_sock_hdl;
     uint8_t *puc_dns_name_str;
     uint16_t us_host_port_ho;
@@ -37,6 +39,9 @@ private:
 
     void *imageRoutine ();
     void *networkRoutine (NetworkMessage *message);
+
+    static void _onNewFile (std::string name, std::string path, void *this_);
+    void onNewFile (std::string name, std::string path);
 public:
     LabelClient();
     LabelClient(uint8_t *puc_dns_name_str, uint16_t us_host_port_ho);

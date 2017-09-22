@@ -9,6 +9,7 @@ using indexer::IndexEntry;
 LabelClient::LabelClient() {
   labelImage = NULL;
   fts = NULL;
+  fsWatch = NULL;
   mImagePool = NULL;
   mNetworkPool = NULL;
   hl_sock_hdl = NULL;
@@ -46,7 +47,7 @@ void *LabelClient::networkRoutine (NetworkMessage *message) {
   header->set_payload(0);
   Index *payload = packet.mutable_payload();
 
-  printf ("Payload? %d\n", packet.has_payload());
+  LOG(INFO) << "Payload? " << packet.has_payload();
 
   IndexEntry *entry = NULL;
 
@@ -59,16 +60,14 @@ void *LabelClient::networkRoutine (NetworkMessage *message) {
     entry->set_key(label.label());
     entry->set_probability(label.score());
   }
-  printf ("Num of entries: %d\n", payload->entry_size());
+  LOG(INFO) << "Num of entries " << payload->entry_size();
 
   int size = packet.ByteSize();
-  printf ("Size before: %d\n", size);
 
   header->set_payload(size);
 
-  printf ("payload? %d\n", header->has_payload());
+  LOG(INFO) << "Payload? " << packet.has_payload();
   size = packet.ByteSize();
-  printf ("Size after: %d\n", size);
 
   uint8_t *buffer = (uint8_t *) malloc(size);
   memset(buffer, 0x00, size);
@@ -106,7 +105,20 @@ void LabelClient::init() {
     labelImage = new LabelImage();
     labelImage->init(LabelClient::_onLabel, this);
 
+    vector<string> filters;
+    filters.emplace_back("jpg");
+    filters.emplace_back("png");
+    fsWatch = new FsWatch("/tensorflow/tensorflow/examples/ch-tf-label-image-client");
+    fsWatch->init();
+    fsWatch->OnNewFileCbk(LabelClient::_onNewFile, this);
+    fsWatch->start(filters);
+
     FtsOptions options;
+    memset(&options, 0x00, sizeof(FtsOptions));
+    options.bIgnoreRegularFiles = false;
+    options.bIgnoreHiddenFiles = true;
+    options.bIgnoreHiddenDirs = true;
+    options.bIgnoreRegularDirs = true;
     options.filters.emplace_back<string>("jpg");
     fts = new Fts ("./tensorflow/examples/ch-tf-label-image-client", &options);
 
@@ -130,7 +142,6 @@ void LabelClient::_onLabel (std::string image, std::vector<std::string> labels, 
 
 void LabelClient::onLabel (std::string image, std::vector<std::string> labels, std::vector<float> scores) {
   NetworkMessage *message = new NetworkMessage();
-  printf ("Label Client: %p\n", this);
   message->set_client((::google::protobuf::uint64) this);
   message->set_image(image);
 
@@ -139,7 +150,6 @@ void LabelClient::onLabel (std::string image, std::vector<std::string> labels, s
     label->set_label(labels[pos]);
     label->set_score(scores[pos]);
   }
-  printf ("Labels size: %d\n", message->labels_size());
   ThreadJob *job = new ThreadJob (LabelClient::_networkRoutine, message);
   mNetworkPool->addJob(job);
 }
@@ -150,7 +160,17 @@ void LabelClient::_onFile (std::string name, std::string ext, std::string path, 
 }
 
 void LabelClient::onFile (std::string name, std::string ext, std::string path) {
-  printf ("File: %10s %50s %s\n",
-    ext.data(), name.data(), path.data());
+  LOG(INFO) << "File: " << path.data();
   labelImage->process(path);
 }
+
+void LabelClient::_onNewFile (std::string name, std::string path, void *this_) {
+  LabelClient *client = (LabelClient *) this_;
+  client->onNewFile(name, path);
+}
+
+void LabelClient::onNewFile (std::string name, std::string path) {
+  LOG(INFO) << "New File: " << path.data();
+  labelImage->process(path);
+}
+
