@@ -5,6 +5,7 @@ int main(int argc, char* argv[]) {
 
   PAL_LOGGER_INIT_PARAMS_X x_init_params = {false};
   pal_env_init ();                                                                 
+
   
   x_init_params.e_level = eLOG_LEVEL_HIGH;                                         
   x_init_params.b_enable_console_logging = true;                                   
@@ -27,7 +28,9 @@ int main(int argc, char* argv[]) {
   string output_layer = "InceptionV3/Predictions/Reshape_1";
   bool self_test = false;
   string root_dir = "";
+  bool daemon = false;
   std::vector<Flag> flag_list = {
+      Flag("daemon", &daemon, "Daemonize the process"),
       Flag("image", &image, "image to be processed"),
       Flag("graph", &graph, "graph to be executed"),
       Flag("labels", &labels, "name of file containing labels"),
@@ -47,6 +50,11 @@ int main(int argc, char* argv[]) {
   if (!parse_result) {
     LOG(ERROR) << usage;
     return -1;
+  }
+
+  if (daemon) {
+    PAL_DAMONIZE_PROCESS_PARAMS_X x_daemon = {0};
+    pal_daemonize_process (&x_daemon);
   }
 
   // We need to call this to set up global state for TensorFlow.
