@@ -6,6 +6,9 @@ using indexer::Packet;
 using indexer::Index;
 using indexer::IndexEntry;
 
+using ChCppUtils::ThreadJob;
+using ChCppUtils::FtsOptions;
+
 LabelClient::LabelClient() {
   labelImage = NULL;
   fts = NULL;
@@ -164,12 +167,12 @@ void LabelClient::onFile (std::string name, std::string ext, std::string path) {
   labelImage->process(path);
 }
 
-void LabelClient::_onNewFile (std::string name, std::string path, void *this_) {
+void LabelClient::_onNewFile (std::string path, void *this_) {
   LabelClient *client = (LabelClient *) this_;
-  client->onNewFile(name, path);
+  client->onNewFile(path);
 }
 
-void LabelClient::onNewFile (std::string name, std::string path) {
+void LabelClient::onNewFile (std::string path) {
   LOG(INFO) << "New File: " << path.data();
   labelImage->process(path);
 }

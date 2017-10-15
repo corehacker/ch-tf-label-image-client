@@ -15,6 +15,10 @@
 using label_client_internal::NetworkMessage;
 using label_client_internal::NetworkMessage_Label;
 
+using ChCppUtils::FsWatch;
+using ChCppUtils::ThreadPool;
+using ChCppUtils::Fts;
+
 class LabelClient;
 
 class LabelClient {
@@ -40,8 +44,8 @@ private:
     void *imageRoutine ();
     void *networkRoutine (NetworkMessage *message);
 
-    static void _onNewFile (std::string name, std::string path, void *this_);
-    void onNewFile (std::string name, std::string path);
+    static void _onNewFile (std::string path, void *this_);
+    void onNewFile (std::string path);
 public:
     LabelClient();
     LabelClient(uint8_t *puc_dns_name_str, uint16_t us_host_port_ho);
