@@ -9,7 +9,8 @@ using indexer::IndexEntry;
 using ChCppUtils::ThreadJob;
 using ChCppUtils::FtsOptions;
 
-LabelClient::LabelClient() {
+LabelClient::LabelClient(Config *config) {
+  this->config = config;
   labelImage = NULL;
   fts = NULL;
   fsWatch = NULL;
@@ -26,6 +27,17 @@ LabelClient::LabelClient(uint8_t *puc_dns_name_str, uint16_t us_host_port_ho) {
 }
 
 LabelClient::~LabelClient() {
+}
+
+void LabelClient::_onLoad(HttpRequestLoadEvent *event, void *this_) {
+  LabelClient *client = (LabelClient *) this_;
+  return client->onLoad(event);
+}
+
+void LabelClient::onLoad(HttpRequestLoadEvent *event) {
+  HttpResponse *response = event->getResponse();
+  LOG(INFO) << "New Async Request (Complete): " <<
+    response->getResponseCode() << " " << response->getResponseText();
 }
 
 void * LabelClient::_imageRoutine (void *arg, struct event_base *base) {
@@ -45,6 +57,37 @@ void *LabelClient::imageRoutine () {
 }
 
 void *LabelClient::networkRoutine (NetworkMessage *message) {
+  HttpRequest *httpRequest = new HttpRequest();
+  httpRequest->onLoad(LabelClient::_onLoad).bind(this);
+
+  json body;
+
+  string file = message->image();
+  string base64 = base64_encode((unsigned char *) file.data(), file.length());
+  body["name"] = file;
+  body["base64"] = base64;
+
+  for (int pos = 0; pos < message->labels_size(); ++pos) {
+    NetworkMessage_Label label = message->labels(pos);
+    LOG(INFO) << message->image() << " (" << label.label() << "): " << label.score();
+  }
+
+  string b = body.dump(); 
+  LOG(INFO) << body.dump(2);
+
+  std::string authorization = "Basic ";
+  std::string user = "elastic:changeme";
+  authorization += base64_encode((unsigned char *) user.data(), user.length());
+
+  LOG(INFO) << "Authorization: " << authorization;
+
+  string url = "http://127.0.0.1:9200/photos/index/" + base64;
+  httpRequest->open(EVHTTP_REQ_PUT, url)
+    .setHeader("Authorization", authorization)
+    .setHeader("Content-Type", "application/json; charset=UTF-8")
+    .send((void *) b.data(), b.length());
+
+#if 0
   Packet packet;
   PacketHeader *header = packet.mutable_header();
   header->set_payload(0);
@@ -86,6 +129,7 @@ void *LabelClient::networkRoutine (NetworkMessage *message) {
   } else {
     LOG(INFO) << "Success sending to server. " << e_error;
   }
+#endif
 
   return NULL;
 }
@@ -157,23 +201,24 @@ void LabelClient::onLabel (std::string image, std::vector<std::string> labels, s
   mNetworkPool->addJob(job);
 }
 
-void LabelClient::_onFile (std::string name, std::string ext, std::string path, void *this_) {
+void LabelClient::_onFile (OnFileData &data, void *this_) {
   LabelClient *client = (LabelClient *) this_;
-  client->onFile(name, ext, path);
+  client->onFile(data);
 }
 
-void LabelClient::onFile (std::string name, std::string ext, std::string path) {
-  LOG(INFO) << "File: " << path.data();
-  labelImage->process(path);
+void LabelClient::onFile (OnFileData &data) {
+  LOG(INFO) << "File: " << data.path.data();
+  labelImage->process(data.path);
 }
 
-void LabelClient::_onNewFile (std::string path, void *this_) {
+void LabelClient::_onNewFile (OnFileData &data, void *this_) {
   LabelClient *client = (LabelClient *) this_;
-  client->onNewFile(path);
+  client->onNewFile(data);
 }
 
-void LabelClient::onNewFile (std::string path) {
-  LOG(INFO) << "New File: " << path.data();
-  labelImage->process(path);
+void LabelClient::onNewFile (OnFileData &data) {
+  LOG(INFO) << "New File: " << data.path.data();
+  labelImage->process(data.path);
 }
+
 

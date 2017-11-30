@@ -10,7 +10,7 @@ exports_files(["LICENSE"])
 cc_binary(
     name = "ch-tf-label-image-client",
     srcs = [
-        "main.cc", "label-client.h", "label-client.cc", "label-image.h", "label-image.cc"
+        "main.cc", "label-client.h", "label-client.cc", "label-image.h", "label-image.cc", "config.h", "config.cc"
     ],
     linkopts = select({
         "//tensorflow:android": [
@@ -23,7 +23,7 @@ cc_binary(
             "-s",
             "-Wl,--exclude-libs,ALL",
         ],
-        "//conditions:default": ["-lm", "-L/usr/local/lib", "-lch-pal", "-lch-utils", "-lch-cpp-utils", "-lch-protos"],
+        "//conditions:default": ["-lm", "-L/usr/local/lib", "-lch-pal", "-lch-utils", "-lch-cpp-utils", "-lch-protos", "-lglog"],
     }),
     deps = select({
         "//tensorflow:android": [

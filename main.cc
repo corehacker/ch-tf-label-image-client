@@ -1,7 +1,16 @@
 
 #include "label-client.h"
 
+#include "config.h"
+
+static Config *config = nullptr;
+
 int main(int argc, char* argv[]) {
+
+  google::InstallFailureSignalHandler();
+
+  config = new Config();
+  config->init();
 
   PAL_LOGGER_INIT_PARAMS_X x_init_params = {false};
   pal_env_init ();                                                                 
@@ -64,7 +73,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  LabelClient *client = new LabelClient();
+  LabelClient *client = new LabelClient(config);
   client->init();
   client->process();
 
