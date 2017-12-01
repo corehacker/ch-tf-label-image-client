@@ -52,6 +52,7 @@ Config::Config() :
         esProtocol = "http";
         esHostname = "127.0.0.1";
         esPort = 9200;
+        esPrefixPath = "/example/photos/index";
 }
 
 Config::~Config() {
@@ -70,6 +71,8 @@ bool Config::populateConfigValues() {
         esPort = mJson["elastic-search"]["port"];
         LOG(INFO) << "elastic-search.port : " << esPort;
 
+        esPrefixPath = mJson["elastic-search"]["prefix-path"];
+        LOG(INFO) << "elastic-search.prefix-path : " << esPrefixPath;
 
 	LOG(INFO) << "----------------------->Config";
 	return true;
@@ -93,3 +96,6 @@ uint16_t Config::getEsPort() {
         return esPort;
 }
 
+string &Config::getEsPrefixPath() {
+	return esPrefixPath;
+}

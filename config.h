@@ -59,6 +59,7 @@ public:
         string &getEsProtocol();
         string &getEsHostname();
         uint16_t getEsPort();
+        string &getEsPrefixPath();
 
 private:
 	string etcConfigPath;
@@ -68,6 +69,7 @@ private:
         string esProtocol;
         string esHostname;
         uint16_t esPort;
+        string esPrefixPath;
 
 	bool populateConfigValues();
 };

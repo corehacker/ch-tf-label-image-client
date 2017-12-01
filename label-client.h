@@ -47,6 +47,7 @@ private:
     ThreadPool *mImagePool;
     ThreadPool *mNetworkPool;
     Config *config;
+    string esPrefix;
 
     static void _onFile (OnFileData &data, void *this_);
     void onFile (OnFileData &data);

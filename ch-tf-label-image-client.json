@@ -5,7 +5,8 @@
     "run-forever": false,
     "elastic-search": {
         "protocol": "http",
-        "hostname": "127.0.0.1",
-        "port": 9200
+        "hostname": "172.17.0.1",
+        "port": 9200,
+        "prefix-path": "/photos/photo"
     }
 }

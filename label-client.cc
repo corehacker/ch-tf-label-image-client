@@ -1,6 +1,8 @@
 
 #include "label-client.h"
 
+using std::to_string;
+
 using indexer::PacketHeader;
 using indexer::Packet;
 using indexer::Index;
@@ -18,7 +20,11 @@ LabelClient::LabelClient(Config *config) {
   mNetworkPool = NULL;
   hl_sock_hdl = NULL;
   puc_dns_name_str = (uint8_t *) "127.0.0.1";
-  us_host_port_ho = 8888; 
+  us_host_port_ho = 8888;
+  esPrefix = config->getEsProtocol() + "://" + 
+    config->getEsHostname() + ":" + to_string(config->getEsPort()) +
+    config->getEsPrefixPath();
+  LOG(INFO) << "Elastic search prefix: " << esPrefix;
 }
 
 LabelClient::LabelClient(uint8_t *puc_dns_name_str, uint16_t us_host_port_ho) {
@@ -70,6 +76,7 @@ void *LabelClient::networkRoutine (NetworkMessage *message) {
   for (int pos = 0; pos < message->labels_size(); ++pos) {
     NetworkMessage_Label label = message->labels(pos);
     LOG(INFO) << message->image() << " (" << label.label() << "): " << label.score();
+    body[label.label()] = label.score();
   }
 
   string b = body.dump(); 
@@ -81,7 +88,7 @@ void *LabelClient::networkRoutine (NetworkMessage *message) {
 
   LOG(INFO) << "Authorization: " << authorization;
 
-  string url = "http://127.0.0.1:9200/photos/index/" + base64;
+  string url = esPrefix + "/" + base64;
   httpRequest->open(EVHTTP_REQ_PUT, url)
     .setHeader("Authorization", authorization)
     .setHeader("Content-Type", "application/json; charset=UTF-8")
