@@ -47,8 +47,8 @@
 using std::ifstream;
 
 Config::Config() :
-				ChCppUtils::Config("/etc/ch-tf-label-image-client/ch-tf-label-image-client.json",
-						"./ch-tf-label-image-client.json") {
+	ChCppUtils::Config("/etc/ch-tf-label-image-client/ch-tf-label-image-client.json",
+			"./tensorflow/examples/ch-tf-label-image-client/ch-tf-label-image-client.json") {
         esProtocol = "http";
         esHostname = "127.0.0.1";
         esPort = 9200;
